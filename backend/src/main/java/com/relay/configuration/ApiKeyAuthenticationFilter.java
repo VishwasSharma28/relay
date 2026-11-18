@@ -16,6 +16,7 @@ import com.relay.dto.ApiResponse;
 import com.relay.exceptions.ApiException;
 import com.relay.models.ApiKeyPrincipal;
 import com.relay.services.ApiKeyService;
+import com.relay.services.UsageService;
 
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -25,10 +26,12 @@ import tools.jackson.databind.ObjectMapper;
 
 public class ApiKeyAuthenticationFilter extends OncePerRequestFilter {
     private final ApiKeyService apiKeys;
+    private final UsageService usage;
     private final ObjectMapper objectMapper;
 
-    public ApiKeyAuthenticationFilter(ApiKeyService apiKeys, ObjectMapper objectMapper) {
+    public ApiKeyAuthenticationFilter(ApiKeyService apiKeys, UsageService usage, ObjectMapper objectMapper) {
         this.apiKeys = apiKeys;
+        this.usage = usage;
         this.objectMapper = objectMapper;
     }
 
@@ -53,6 +56,16 @@ public class ApiKeyAuthenticationFilter extends OncePerRequestFilter {
         } catch (ApiException exception) {
             SecurityContextHolder.clearContext();
             writeUnauthorized(response);
+            return;
+        }
+        try {
+            usage.recordAndCheck(principal);
+        } catch (ApiException exception) {
+            SecurityContextHolder.clearContext();
+            response.setStatus(exception.getStatus().value());
+            response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+            objectMapper.writeValue(response.getOutputStream(), ApiResponse.failure(
+                    new ApiError(exception.getCode(), exception.getMessage(), null)));
             return;
         }
         var authentication = new UsernamePasswordAuthenticationToken(principal, null,

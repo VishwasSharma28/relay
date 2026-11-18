@@ -1,0 +1,46 @@
+﻿services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: relay-postgres
+    restart: unless-stopped
+
+    environment:
+      POSTGRES_DB: ${DB_NAME}
+      POSTGRES_USER: ${DB_USERNAME}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+
+    ports:
+      - "127.0.0.1:${DB_PORT}:5432"
+
+    volumes:
+      - relay_pgdata:/var/lib/postgresql/data
+
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME} -d ${DB_NAME}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  app:
+    build: .
+    container_name: relay-app
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      DB_URL: jdbc:postgresql://postgres:5432/${DB_NAME}
+      DB_USERNAME: ${DB_USERNAME}
+      DB_PASSWORD: ${DB_PASSWORD}
+      SESSION_COOKIE_SECURE: ${SESSION_COOKIE_SECURE:-false}
+      RELAY_ADMIN_EMAIL: ${RELAY_ADMIN_EMAIL:-}
+      RELAY_ADMIN_PASSWORD: ${RELAY_ADMIN_PASSWORD:-}
+      RELAY_ADMIN_FULL_NAME: ${RELAY_ADMIN_FULL_NAME:-}
+    ports:
+      - "8080:8080"
+    stop_grace_period: 40s
+
+volumes:
+  relay_pgdata:
+    name: relay_pgdata

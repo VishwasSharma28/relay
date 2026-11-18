@@ -17,6 +17,7 @@ import tools.jackson.databind.ObjectMapper;
 import com.relay.dto.ApiError;
 import com.relay.dto.ApiResponse;
 import com.relay.services.ApiKeyService;
+import com.relay.services.UsageService;
 
 @Configuration
 @EnableWebSecurity
@@ -28,11 +29,14 @@ public class SecurityConfiguration {
 
     @Bean
     SecurityFilterChain securityFilterChain(HttpSecurity http, ObjectMapper objectMapper,
-            ApiKeyService apiKeyService) throws Exception {
+            ApiKeyService apiKeyService, UsageService usageService,
+            @org.springframework.beans.factory.annotation.Value("${server.servlet.session.cookie.secure:false}")
+            boolean secureCookies) throws Exception {
         CookieCsrfTokenRepository csrfTokenRepository = CookieCsrfTokenRepository.withHttpOnlyFalse();
         csrfTokenRepository.setHeaderName("X-CSRF-TOKEN");
+        csrfTokenRepository.setCookieCustomizer(cookie -> cookie.secure(secureCookies).sameSite("Lax"));
         ApiKeyAuthenticationFilter apiKeyAuthenticationFilter = new ApiKeyAuthenticationFilter(apiKeyService,
-                objectMapper);
+                usageService, objectMapper);
         return http
                 .csrf(csrf -> csrf.csrfTokenRepository(csrfTokenRepository)
                         .csrfTokenRequestHandler(new CsrfTokenRequestAttributeHandler())
@@ -50,7 +54,9 @@ public class SecurityConfiguration {
                         .requestMatchers("/api/auth/register", "/api/auth/login", "/api/auth/logout",
                                 "/api/auth/csrf").permitAll()
                         .requestMatchers("/api/v1/**").hasAuthority("API_KEY")
-                        .anyRequest().authenticated())
+                        .requestMatchers("/api/**").authenticated()
+                        .requestMatchers("/actuator/health", "/actuator/health/**").permitAll()
+                        .anyRequest().permitAll())
                 .exceptionHandling(exceptions -> exceptions.authenticationEntryPoint((request, response, exception) -> {
                     response.setStatus(HttpStatus.UNAUTHORIZED.value());
                     response.setContentType(MediaType.APPLICATION_JSON_VALUE);

@@ -1,0 +1,70 @@
+[
+  {
+    "key": "todo-list",
+    "name": "Todo list",
+    "description": "Tasks with a completion flag, plus endpoints to add a task and list open tasks.",
+    "version": "1.0.0",
+    "resources": [
+      {"name": "Todos", "slug": "todos", "description": "Tasks to complete",
+       "schemaDefinition": {"type": "object", "properties": {
+         "title": {"type": "STRING", "required": true},
+         "done": {"type": "BOOLEAN", "default": false},
+         "dueDate": {"type": "DATE"}}}}
+    ],
+    "customApis": [
+      {"name": "Add todo", "slug": "add-todo", "method": "POST",
+       "definition": {"steps": [{"id": "todo", "type": "create", "resource": "todos",
+                                 "data": {"title": "{{input.title}}", "dueDate": "{{input.dueDate}}"}}],
+                      "response": {"status": 201, "body": "{{steps.todo}}"}}},
+      {"name": "Open todos", "slug": "open-todos", "method": "GET",
+       "definition": {"steps": [{"id": "open", "type": "list", "resource": "todos", "filter": {"done": false}, "limit": 50}],
+                      "response": {"status": 200, "body": "{{steps.open.data}}"}}}
+    ]
+  },
+  {
+    "key": "blog",
+    "name": "Blog",
+    "description": "Posts and comments with unique post slugs and a publish endpoint.",
+    "version": "1.0.0",
+    "resources": [
+      {"name": "Posts", "slug": "posts", "description": "Blog posts",
+       "schemaDefinition": {"type": "object", "properties": {
+         "slug": {"type": "STRING", "required": true, "unique": true},
+         "title": {"type": "STRING", "required": true},
+         "body": {"type": "STRING"},
+         "published": {"type": "BOOLEAN", "default": false},
+         "publishedAt": {"type": "DATETIME"}}}},
+      {"name": "Comments", "slug": "comments", "description": "Reader comments on posts",
+       "schemaDefinition": {"type": "object", "properties": {
+         "postId": {"type": "STRING", "required": true},
+         "author": {"type": "STRING", "required": true},
+         "body": {"type": "STRING", "required": true}}}}
+    ],
+    "customApis": [
+      {"name": "Publish post", "slug": "publish-post", "method": "POST",
+       "definition": {"steps": [{"id": "post", "type": "update", "resource": "posts", "recordId": "{{input.id}}",
+                                 "data": {"published": true, "publishedAt": "{{input.publishedAt}}"}}],
+                      "response": {"status": 200, "body": "{{steps.post}}"}}}
+    ]
+  },
+  {
+    "key": "contact-form",
+    "name": "Contact form",
+    "description": "Stores website contact-form submissions through a single public endpoint.",
+    "version": "1.0.0",
+    "resources": [
+      {"name": "Contact messages", "slug": "contact-messages", "description": "Inbound contact requests",
+       "schemaDefinition": {"type": "object", "properties": {
+         "name": {"type": "STRING", "required": true},
+         "email": {"type": "STRING", "required": true},
+         "message": {"type": "STRING", "required": true},
+         "handled": {"type": "BOOLEAN", "default": false}}}}
+    ],
+    "customApis": [
+      {"name": "Submit contact form", "slug": "submit-contact", "method": "POST",
+       "definition": {"steps": [{"id": "msg", "type": "create", "resource": "contact-messages",
+                                 "data": {"name": "{{input.name}}", "email": "{{input.email}}", "message": "{{input.message}}"}}],
+                      "response": {"status": 201, "body": {"received": true, "id": "{{steps.msg.id}}"}}}}
+    ]
+  }
+]

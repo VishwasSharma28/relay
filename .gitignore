@@ -1,0 +1,28 @@
+﻿# Environment secrets
+.env
+.env.*
+!.env.example
+
+# Java build files
+target/
+*.class
+
+# IDE
+.idea/
+*.iml
+.classpath
+.project
+.settings/
+
+# Logs
+*.log
+logs/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Frontend and packaged static assets
+node_modules/
+frontend/dist/
+backend/src/main/resources/static/

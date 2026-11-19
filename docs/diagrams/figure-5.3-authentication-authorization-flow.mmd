@@ -1,0 +1,60 @@
+flowchart TD
+    Client[Client]
+    Start[HTTP request]
+    Client --> Start
+    Start --> Route{Request route and credentials}
+
+    subgraph Session[Session login and cookie plus CSRF path]
+        CsrfGet[GET /api/auth/csrf]
+        CsrfToken[Return token; set XSRF-TOKEN cookie]
+        LoginPost[POST /api/auth/login with email/password and X-CSRF-TOKEN]
+        AuthManager[AuthenticationManager authenticates credentials]
+        CreateSession[AuthController stores SecurityContext in HttpSession; rotates existing session ID]
+        SessionCookie[Response sets JSESSIONID session cookie]
+        SessionRequest[Subsequent /api request with JSESSIONID]
+        CsrfCheck[CSRF filter checks unsafe methods using XSRF-TOKEN cookie and X-CSRF-TOKEN header]
+        SessionAuth[Session SecurityContext -> RelayUserPrincipal]
+        MemberCheck[RecordService -> ProjectAccessService.requireMember(projectId, userId)]
+        RoleDecision{Member role?}
+        ManagerCheck[Manager-only operations: requireManager accepts OWNER or ADMIN]
+        SessionAllowed[Continue to controller/service]
+        SessionDenied[Non-member: project not found; MEMBER on manager-only action: 403]
+        CsrfGet --> CsrfToken --> LoginPost --> AuthManager --> CreateSession --> SessionCookie --> SessionRequest --> CsrfCheck --> SessionAuth --> MemberCheck --> RoleDecision
+        RoleDecision -->|OWNER / ADMIN / MEMBER| SessionAllowed
+        RoleDecision -->|No membership| SessionDenied
+        SessionAllowed -. manager-only operation .-> ManagerCheck
+        ManagerCheck -->|OWNER or ADMIN| SessionAllowed
+        ManagerCheck -->|MEMBER| SessionDenied
+    end
+
+    subgraph ApiKey[API-key filter path]
+        Bearer[Authorization: Bearer relay_*]
+        Matcher[ApiKeyRequestMatcher recognizes /api/v1 generated routes and dynamic record routes]
+        Filter[ApiKeyAuthenticationFilter runs before UsernamePasswordAuthenticationFilter]
+        Verify[ApiKeyService authenticates token; usage limit check]
+        Principal[Set SecurityContext principal ApiKeyPrincipal; authority API_KEY]
+        ApiRoute{Generated /api/v1 route?}
+        Authority[Security rule requires API_KEY]
+        KeyScope[RecordService checks requested project and environment match key projectId/environmentId]
+        KeyAllowed[Continue as key-scoped project/environment]
+        Invalid[Invalid/unavailable key: 401; usage rejection returns its API error]
+        KeyCsrf[CSRF skipped for generated API routes and matching bearer-token record routes]
+        Bearer --> Matcher --> Filter --> Verify
+        Verify -->|invalid| Invalid
+        Verify -->|valid| Principal --> KeyCsrf --> ApiRoute
+        ApiRoute -->|Yes| Authority --> KeyAllowed
+        ApiRoute -->|Dynamic record route| KeyScope --> KeyAllowed
+    end
+
+    Route -->|Browser session auth / ordinary /api endpoints| CsrfGet
+    Route -->|Matching API route with Bearer token| Bearer
+    Route -->|Missing or invalid Bearer token on generated route| Filter
+
+    Note[Important: API-key requests do not look up project_members roles. They are restricted by key project/environment scope; project-member role checks apply to session-authenticated requests.]
+    KeyScope -. authorization distinction .-> Note
+    MemberCheck -. authorization distinction .-> Note
+
+    classDef success fill:#e7f5e8,stroke:#39844a,color:#152b18;
+    classDef failure fill:#fdeaea,stroke:#b64242,color:#341515;
+    class SessionAllowed,KeyAllowed success;
+    class SessionDenied,Invalid failure;

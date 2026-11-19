@@ -1,0 +1,127 @@
+erDiagram
+    users {
+        UUID id PK
+        VARCHAR email UK
+        VARCHAR role
+    }
+    projects {
+        UUID id PK
+        UUID created_by FK
+        VARCHAR slug UK
+    }
+    project_members {
+        UUID project_id PK, FK
+        UUID user_id PK, FK
+        VARCHAR role
+    }
+    environments {
+        UUID id PK
+        UUID project_id FK
+        VARCHAR slug UK
+    }
+    resources {
+        UUID id PK
+        UUID project_id FK
+        UUID current_schema_version_id FK
+        VARCHAR slug
+    }
+    resource_schema_versions {
+        UUID id PK
+        UUID project_id FK
+        UUID resource_id FK
+        INTEGER version UK
+        JSONB schema_definition
+    }
+    records {
+        UUID id PK
+        UUID project_id FK
+        UUID environment_id FK
+        UUID resource_id FK
+        JSONB data
+    }
+    api_keys {
+        UUID id PK
+        UUID project_id FK
+        UUID environment_id FK
+        UUID created_by FK
+        VARCHAR key_prefix UK
+        CHAR key_hash UK
+    }
+    custom_apis {
+        UUID id PK
+        UUID project_id FK
+        VARCHAR slug
+    }
+    custom_api_versions {
+        UUID id PK
+        UUID project_id FK
+        UUID custom_api_id FK
+        INTEGER version UK
+        UUID created_by FK
+    }
+    project_module_installations {
+        UUID project_id PK, FK
+        VARCHAR module_key PK
+        UUID installed_by FK
+    }
+    releases {
+        UUID id PK
+        UUID project_id FK
+        INTEGER version UK
+        UUID created_by FK
+    }
+    deployments {
+        UUID id PK
+        UUID project_id FK
+        UUID environment_id FK
+        UUID release_id FK
+        UUID created_by FK
+    }
+    project_quotas {
+        UUID project_id PK, FK
+        INTEGER daily_request_limit
+        INTEGER requests_per_minute
+    }
+    usage_daily {
+        UUID project_id PK, FK
+        UUID environment_id FK
+        DATE day PK
+        BIGINT request_count
+    }
+    usage_minute {
+        UUID project_id PK, FK
+        TIMESTAMPTZ window_start PK
+        INTEGER request_count
+    }
+
+    users ||--o{ projects : creates
+    projects ||--o{ project_members : has_members
+    users ||--o{ project_members : joins_projects
+    projects ||--o{ environments : has_environments
+    projects ||--o{ resources : has_resources
+    resources ||--o{ resource_schema_versions : has_schema_versions
+    resource_schema_versions o|--o| resources : current_schema_version
+    environments ||--o{ records : stores
+    resources ||--o{ records : defines_records
+    projects ||--o{ api_keys : owns
+    environments ||--o{ api_keys : scopes_keys
+    users ||--o{ api_keys : creates
+    projects ||--o{ custom_apis : defines
+    custom_apis ||--o{ custom_api_versions : versions
+    users o|--o{ custom_api_versions : authors
+    projects ||--o{ project_module_installations : installs
+    users o|--o{ project_module_installations : installs_module
+    projects ||--o{ releases : snapshots
+    users o|--o{ releases : authors
+    environments ||--o{ deployments : receives
+    releases ||--o{ deployments : deploys
+    users o|--o{ deployments : initiates
+    projects ||--o| project_quotas : configures
+    environments ||--o{ usage_daily : counts_daily
+    projects ||--o{ usage_minute : counts_per_minute
+
+    %% Composite tenant FKs in migrations: records(project_id, environment_id) -> environments(project_id, id);
+    %% records(project_id, resource_id) -> resources(project_id, id); api_keys(project_id, environment_id) -> environments(project_id, id).
+    %% Schema version uniqueness: (resource_id, version); composite current pointer: resources(project_id, id, current_schema_version_id) -> resource_schema_versions(project_id, resource_id, id).
+    %% usage_daily uses PK (project_id, environment_id, day), with (project_id, environment_id) -> environments(project_id, id).
+    %% Some unique constraints are partial indexes (active custom API slug, one OWNER per project), not plain column-level keys.
